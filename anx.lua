@@ -10,6 +10,7 @@ local function cursor_event_handler(source, status)
     elseif status.kind == "terminated" then
         delete_image(source)
     elseif status.kind == "viewport" then
+        print("Cursor viewport")
         move_image(source, status.rel_x, status.rel_y)
         -- show_image(source)
     elseif status.kind == "cursorhint" then
@@ -24,7 +25,7 @@ end
 
 local function x11_event_handler(x11source, x11status)
     if x11status.kind == "registered" then
-        print("registered")
+        print("x11 registered")
     elseif x11status.kind == "resized" then
         resize_image(x11source, x11status.width, x11status.height)
         show_image(x11source)
@@ -32,6 +33,7 @@ local function x11_event_handler(x11source, x11status)
         delete_image(x11source)
     elseif x11status.kind == "viewport" then
         -- hide_image(x11source)
+        print("x11 viewport")
         move_image(x11source, x11status.rel_x, x11status.rel_y)
     else
         print("x11 source:", x11status.kind)
@@ -40,6 +42,7 @@ end
 
 function client_event_handler(source, status)
     if status.kind == "registered" then
+
     elseif status.kind == "preroll" then
         target_displayhint(source, VRESW, VRESH, TD_HINT_IGNORE, {ppcm = VPPCM})
         resize_image(source, VRESW, VRESH)
@@ -98,32 +101,31 @@ function anx_input(input)
 
     if input.mouse then
         -- For moviment inputs, translate it to x11
-        if input.kind == "analog" then
-            local x = input.samples[2]
-            local y = input.samples[1]
-
-            translated_input = {
-                kind = "analog",
-                devid = input.devid or 0,
-                subid = input.subid or 2,
-                mouse = true,
-                samples = {x, 0, y, 0}
-            }
-            if XARCAN then
-                target_input(XARCAN, translated_input)
-            end
-        else
-            -- For button clicks, forward as-is
-            if XARCAN then
-                target_input(XARCAN, input)
-            end
-        end
-        mouse_iotbl_input(input)
-    elseif input.translated then
-        KEYBOARD:patch(input)
-        if XARCAN then
+        if XARCAN and input.kind == "analog" then
+            target_input(XARCAN, {
+                             kind = "analog",
+                             devid = input.devid or 0,
+                             subid = input.subid or 2,
+                             mouse = true,
+                             samples = {input.samples[2]}
+            })
+        elseif XARCAN and input.kind == "digital" and (input.subid == 256 or input.subid == 257) then
+            -- Translate scroll wheel events to X11 Button4/Button5
+            target_input(XARCAN, {
+                             kind = "digital",
+                             devid = input.devid,
+                             subid = input.subid == 256 and 4 or 5,
+                             mouse = true,
+                             active = input.active,
+                             digital = true
+            })
+        elseif XARCAN then
             target_input(XARCAN, input)
         end
+        mouse_iotbl_input(input)
+    elseif XARCAN and input.translated then
+        KEYBOARD:patch(input)
+        target_input(XARCAN, input)
     end
 end
 
